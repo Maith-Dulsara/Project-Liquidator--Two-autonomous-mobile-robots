@@ -1,0 +1,112 @@
+#include <Arduino.h>
+#include <PID_v1.h> // PID library
+
+// Pin definitions
+#define LINE_SENSOR_PIN A0
+#define RIGHT_MOTOR_PIN 3
+#define LEFT_MOTOR_PIN 5
+#define OBSTACLE_SENSOR_PIN 7
+#define COLOR_SENSOR_PIN A1
+#define YELLOW_OBSTACLE_PIN 9
+
+// Variables
+double lineSensorValue;
+int checkpointCount = 0;
+int color;
+bool assistbotSignalCheck = false;
+bool useSimplePath = true;
+bool junction = false;
+bool lineEnding = false;
+bool clawActivated = false;
+bool obstacles = false;
+
+// Motor objects
+Adafruit_DCMotor *rightMotor;
+Adafruit_DCMotor *leftMotor;
+
+// PID variables
+double Setpoint, Input, Output;
+double Kp = 2, Ki = 5, Kd = 1;
+PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
+
+void setup() {
+  // Initialize motors
+  rightMotor = new Adafruit_DCMotor(RIGHT_MOTOR_PIN);
+  leftMotor = new Adafruit_DCMotor(LEFT_MOTOR_PIN);
+
+  // Initialize sensors
+  pinMode(LINE_SENSOR_PIN, INPUT);
+  pinMode(OBSTACLE_SENSOR_PIN, INPUT);
+  pinMode(COLOR_SENSOR_PIN, INPUT);
+  pinMode(YELLOW_OBSTACLE_PIN, INPUT);
+
+  // Set PID input range
+  pid.SetInputLimits(0, 1023);
+
+  // Set PID output range
+  pid.SetOutputLimits(-255, 255);
+
+  // Initialize PID variables
+  Setpoint = 500;
+  pid.SetMode(AUTOMATIC);
+
+  // Turn on the robot
+  rightMotor->run(FORWARD);
+  leftMotor->run(FORWARD);
+}
+
+void loop() {
+  // Attach the assistant robot
+  // Move forward until the robot is on the start square
+  // Forward until a line is detected
+  while (lineSensorValue > 500) {
+    lineSensorValue = analogRead(LINE_SENSOR_PIN);
+    rightMotor->run(FORWARD);
+    leftMotor->run(FORWARD);
+  }
+
+  // While the robot has not reached checkpoint-01
+  while (checkpointCount < 1) {
+    // How to check if the robot reaches a checkpoint?
+    // Forward with PID
+    lineSensorValue = analogRead(LINE_SENSOR_PIN);
+    Input = lineSensorValue;
+    pid.Compute();
+    rightMotor->setSpeed(Output);
+    leftMotor->setSpeed(Output);
+
+    // If !junction
+    if (!junction) {
+      rightMotor->run(FORWARD);
+      leftMotor->run(FORWARD);
+    } else {
+      // Turn path1
+      rightMotor->run(FORWARD);
+      leftMotor->run(BACKWARD);
+
+      // If (!lineending)
+      if (!lineEnding) {
+        // Forward with PID
+        lineSensorValue = analogRead(LINE_SENSOR_PIN);
+        Input = lineSensorValue;
+        pid.Compute();
+        rightMotor->setSpeed(Output);
+        leftMotor->setSpeed(Output);
+      } else {
+        // Return to junction
+        rightMotor->run(BACKWARD);
+        leftMotor->run(BACKWARD);
+
+        // Turn path2
+        rightMotor->run(BACKWARD);
+        leftMotor->run(FORWARD);
+      }
+    }
+
+    // Check for checkpoint-01
+    if (digitalRead(OBSTACLE_SENSOR_PIN) == HIGH) {
+      checkpointCount++;
+
+      // Wait for the assistant robot to unload
+      while (!assistbotSignalCheck) {
+        // How to check if the
