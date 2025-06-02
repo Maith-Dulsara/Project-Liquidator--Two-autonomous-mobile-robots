@@ -58,7 +58,7 @@ if(R>=230 && G>=230 && B>=230){
 Serial.println("White");
 
 }
-else if(R>=220 && G<=180 && B<=180){
+else if(R>=220 && G<=180 && B<=180)}
 //voice.say(spt_RED);
 Serial.println("Red");
 }
